@@ -1,5 +1,5 @@
 const expect = require('chai').expect;
-const fse = require('fs-extra');
+// const fse = require('fs-extra');
 const path = require('path');
 const tempy = require('tempy');
 
