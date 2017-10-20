@@ -20,6 +20,7 @@ import './_version.mjs';
 
 let installActivateListenersAdded = false;
 let fetchListenersAdded = false;
+let suppressWarnings = false;
 
 const cacheName = _private.cacheNames.getPrecacheName();
 const precacheController = new PrecacheController(cacheName);
@@ -118,7 +119,7 @@ moduleExports.precache = (entries) => {
 
   installActivateListenersAdded = true;
   self.addEventListener('install', (event) => {
-    event.waitUntil(precacheController.install());
+    event.waitUntil(precacheController.install({suppressWarnings}));
   });
   self.addEventListener('activate', (event) => {
     event.waitUntil(precacheController.cleanup());
@@ -176,6 +177,20 @@ moduleExports.addRoute = (options) => {
 moduleExports.precacheAndRoute = (entries, options) => {
   moduleExports.precache(entries);
   moduleExports.addRoute(options);
+};
+
+/**
+ * Warnings will be logged if any of the precached assets are entered without
+ * a `revision` property. This is extremely dangerous if the URL's aren't
+ * revisioned. However, the warnings can be supressed with this method.
+ *
+ * @param {boolean} suppress
+ *
+ * @alias module:workbox-precahcing.suppressWarnings
+ */
+moduleExports.suppressWarnings = (suppress) => {
+  suppressWarnings = suppress;
+  console.log('Function Called: ', suppressWarnings);
 };
 
 export default moduleExports;
