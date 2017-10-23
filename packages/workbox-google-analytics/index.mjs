@@ -22,6 +22,7 @@ import {Queue, QueuePlugin} from 'workbox-background-sync';
 import {_private} from 'workbox-core';
 import {Route, Router} from 'workbox-routing';
 import {NetworkFirst, NetworkOnly} from 'workbox-runtime-caching';
+
 import {
   QUEUE_NAME,
   MAX_RETENTION_TIME,

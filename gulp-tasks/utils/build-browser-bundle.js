@@ -36,6 +36,8 @@ const globals = (moduleId) => {
   }
 
   const packageName = splitModuleId.shift();
+
+  // TODO(philipwalton): remove this restriction.
   if (splitModuleId.length > 0) {
     throw new Error(oneLine`
     All imports of workbox-* modules must be done from the top level export.
@@ -50,7 +52,16 @@ const globals = (moduleId) => {
   const packagePath = path.join(__dirname, '..', '..', 'packages', packageName);
   try {
     const pkg = require(path.join(packagePath, 'package.json'));
-    return `${constants.NAMESPACE_PREFIX}.${pkg.workbox.browserNamespace}`;
+    const pkgNamespace = pkg.workbox.browserNamespace;
+    let namespace = `${constants.NAMESPACE_PREFIX}.${pkgNamespace}`;
+
+    // TODO(philipwalton): add support for namespaces more levels deep.
+    // const moduleNamespace = splitModuleId.join('.').replace(/\.mjs$/, '');
+    // if (moduleNamespace) {
+    //   namespace += '.' + moduleNamespace;
+    // }
+
+    return namespace;
   } catch (err) {
     logHelper.error(`Unable to get browserNamespace for package: ` +
       `'${packageName}'`);
@@ -75,7 +86,7 @@ module.exports = (packagePath, buildType) => {
   }
 
   const pkgJson = require(path.join(packagePath, 'package.json'));
-  if (!pkgJson.workbox || !pkgJson.workbox.browserNamespace) {
+  if (!(pkgJson.workbox && 'browserNamespace' in pkgJson.workbox)) {
     logHelper.error(ERROR_NO_NAMSPACE + ' ' + packageName);
     return Promise.reject(ERROR_NO_NAMSPACE + ' ' + packageName);
   }
@@ -85,9 +96,9 @@ module.exports = (packagePath, buildType) => {
     prefix = '';
   }
 
-  const exports = pkgJson.workbox.disabledNamedExports ? 'default' : 'named';
-  const namespace =
-    `${prefix}${pkgJson.workbox.browserNamespace}`;
+  const namespace = pkgJson.workbox.browserNamespace ?
+      `${prefix}${pkgJson.workbox.browserNamespace}` : null;
+  const exports = namespace ? 'named' : 'none';
   const outputFilename = `${packageName}.${buildType.slice(0, 4)}.js`;
   const outputDirectory = path.join(packagePath,
     constants.PACKAGE_BUILD_DIRNAME, constants.BROWSER_BUILD_DIRNAME);
@@ -96,8 +107,10 @@ module.exports = (packagePath, buildType) => {
     Building Browser Bundle for
     ${logHelper.highlight(packageName)}.
   `);
-  logHelper.log(`    Exports: ${logHelper.highlight(exports)}`);
-  logHelper.log(`    Namespace: ${logHelper.highlight(namespace)}`);
+
+  if (namespace) {
+    logHelper.log(`    Namespace: ${logHelper.highlight(namespace)}`);
+  }
   logHelper.log(`    Filename: ${logHelper.highlight(outputFilename)}`);
 
   return rollupStream({
