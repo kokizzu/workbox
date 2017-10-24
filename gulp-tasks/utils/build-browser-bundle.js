@@ -37,7 +37,8 @@ const globals = (moduleId) => {
 
   const packageName = splitModuleId.shift();
 
-  // TODO(philipwalton): remove this restriction.
+  // TODO(philipwalton): remove this restriction and allow for
+  // one-level-below imports, e.g. `workbox-routing/Router.mjs`.
   if (splitModuleId.length > 0) {
     throw new Error(oneLine`
     All imports of workbox-* modules must be done from the top level export.
@@ -53,15 +54,8 @@ const globals = (moduleId) => {
   try {
     const pkg = require(path.join(packagePath, 'package.json'));
     const pkgNamespace = pkg.workbox.browserNamespace;
-    let namespace = `${constants.NAMESPACE_PREFIX}.${pkgNamespace}`;
 
-    // TODO(philipwalton): add support for namespaces more levels deep.
-    // const moduleNamespace = splitModuleId.join('.').replace(/\.mjs$/, '');
-    // if (moduleNamespace) {
-    //   namespace += '.' + moduleNamespace;
-    // }
-
-    return namespace;
+    return `${constants.NAMESPACE_PREFIX}.${pkgNamespace}`;
   } catch (err) {
     logHelper.error(`Unable to get browserNamespace for package: ` +
       `'${packageName}'`);
