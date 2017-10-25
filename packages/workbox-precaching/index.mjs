@@ -18,6 +18,7 @@ import core from 'workbox-core';
 import PrecacheController from './controllers/PrecacheController.mjs';
 import defaultPrecachingExport from './default.mjs';
 import './_version.mjs';
+
 /**
  * @module workbox-precaching
  */
