@@ -15,6 +15,8 @@
 
 import {_private} from 'workbox-core';
 import core from 'workbox-core';
+import printMessages from './utils/printMessages.mjs';
+import messages from './utils/messages.mjs';
 import './_version.mjs';
 
 /**
@@ -72,29 +74,12 @@ class CacheOnly {
 
     if (process.env.NODE_ENV !== 'production') {
       if (response) {
-        logMessages.push(`Found a cached response in '${this._cacheName}'`);
+        logMessages.push(messages.cacheHit(this._cacheName));
       } else {
-        logMessages.push(`No response found in cache '${this._cacheName}'`);
-      }
-    }
-
-    if (process.env.NODE_ENV !== 'production') {
-      const urlObj = new URL(event.request.url);
-      const urlToDisplay = urlObj.origin === location.origin ?
-        urlObj.pathname : urlObj.href;
-      _private.logger.groupCollapsed(`Using CacheOnly to repond to ` +
-        `'${urlToDisplay}'`);
-      logMessages.forEach((msg) => {
-        _private.logger.unprefixed.log(msg);
-      });
-
-      if (response) {
-        _private.logger.groupCollapsed(`View the final response here.`);
-        _private.logger.unprefixed.log(response);
-        _private.logger.groupEnd();
+        logMessages.push(messages.cacheMiss(this._cacheName));
       }
 
-      _private.logger.groupEnd();
+      printMessages('CacheOnly', event, logMessages, response);
     }
 
     return response;

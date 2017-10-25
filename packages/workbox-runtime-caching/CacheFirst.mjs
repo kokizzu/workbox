@@ -15,6 +15,8 @@
 
 import {_private} from 'workbox-core';
 import core from 'workbox-core';
+import printMessages from './utils/printMessages.mjs';
+import messages from './utils/messages.mjs';
 import './_version.mjs';
 
 /**
@@ -72,32 +74,41 @@ class CacheFirst {
 
     if (process.env.NODE_ENV !== 'production') {
       if (response) {
-        logMessages.push(`Found a cached response, responding to fetch ` +
-          `event with it.`);
+        logMessages.push(messages.cacheHit(this._cacheName));
       } else {
-        logMessages.push(`No cached response found, making a request to ` +
-          `the network.`);
+        logMessages.push(messages.cacheMiss(this._cacheName));
       }
     }
 
     if (!response) {
+      if (process.env.NODE_ENV) {
+        logMessages.push(messages.makingNetworkRequest(event));
+      }
+
       try {
         response = await _private.fetchWrapper.fetch(
           event.request,
           null,
           this._plugins
         );
+
+        if (process.env.NODE_ENV !== 'production') {
+          if (response) {
+            logMessages.push(messages.networkRequestReturned(event, response));
+          } else {
+            logMessages.push(messages.networkRequestInvalid(event));
+          }
+        }
       } catch (err) {
         if (process.env.NODE_ENV !== 'production') {
-          logMessages.push(`Failed to get response from network.`, err);
+          logMessages.push(messages.networkRequestError(event, err));
         }
         error = err;
       }
 
       if (response) {
         if (process.env.NODE_ENV !== 'production') {
-          logMessages.push(`Received response from network, adding to ` +
-            `cache '${this._cacheName}'.`);
+          logMessages.push(messages.addingToCache(this._cacheName));
         }
 
         // Keep the service worker while we put the request to the cache
@@ -114,22 +125,7 @@ class CacheFirst {
     }
 
     if (process.env.NODE_ENV !== 'production') {
-      const urlObj = new URL(event.request.url);
-      const urlToDisplay = urlObj.origin === location.origin ?
-        urlObj.pathname : urlObj.href;
-      _private.logger.groupCollapsed(`Using CacheFirst to repond to ` +
-        `'${urlToDisplay}'`);
-      logMessages.forEach((msg) => {
-        _private.logger.unprefixed.log(msg);
-      });
-
-      if (response) {
-        _private.logger.groupCollapsed(`View the final response here.`);
-        _private.logger.unprefixed.log(response);
-        _private.logger.groupEnd();
-      }
-
-      _private.logger.groupEnd();
+      printMessages('CacheFirst', event, logMessages, response);
     }
 
     if (error) {
