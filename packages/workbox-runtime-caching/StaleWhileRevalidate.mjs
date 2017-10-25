@@ -16,7 +16,6 @@
 import {_private} from 'workbox-core';
 import core from 'workbox-core';
 
-import printMessages from './utils/printMessages.mjs';
 import messages from './utils/messages.mjs';
 import cacheOkAndOpaquePlugin from './plugins/cacheOkAndOpaquePlugin.mjs';
 import './_version.mjs';
@@ -74,7 +73,6 @@ class StaleWhileRevalidate {
    * @return {Promise<Response>}
    */
   async handle({url, event, params}) {
-    const logMessages = [];
     if (process.env.NODE_ENV !== 'production') {
       core.assert.isInstance(event, FetchEvent, {
         moduleName: 'workbox-runtime-caching',
@@ -82,61 +80,54 @@ class StaleWhileRevalidate {
         funcName: 'handle',
         paramName: 'event',
       });
+
+      _private.logger.groupCollapsed(
+        messages.strategyStart('StaleWhileRevalidate', event));
     }
 
-    const fetchAndCachePromise = _private.fetchWrapper.fetch(
-      event.request,
-      null,
-      this._plugins
-    )
-    .then(async (response) => {
-      if (process.env.NODE_ENV !== 'production') {
-        if (response) {
-          if (process.env.NODE_ENV !== 'production') {
-            logMessages.push(messages.networkRequestReturned(event, response));
-          }
-        } else {
-          logMessages.push(messages.networkRequestInvalid(event));
-        }
-      }
+    const fetchAndCachePromise = this._getFromNetwork(event);
 
-      if (response) {
-        if (process.env.NODE_ENV !== 'production') {
-          logMessages.push(messages.addingToCache(this._cacheName));
-        }
-
-        await _private.cacheWrapper.put(
-          this._cacheName,
-          event.request,
-          response.clone(),
-          this._plugins
-        );
-      }
-
-      return response;
-    });
-
-    const cachedResponse = await _private.cacheWrapper.match(
+    let response = await _private.cacheWrapper.match(
       this._cacheName,
       event.request,
       null,
       this._plugins
     );
 
-    if (process.env.NODE_ENV !== 'production') {
-      if (cachedResponse) {
-        logMessages.push(messages.cacheHit(this._cacheName));
-      } else {
-        logMessages.push(messages.cacheMiss(this._cacheName));
-      }
+    if (response) {
+      event.waitUntil(fetchAndCachePromise);
+    } else {
+      response = await fetchAndCachePromise;
     }
 
-    event.waitUntil(fetchAndCachePromise);
-
-    const response = cachedResponse || await fetchAndCachePromise;
-
     if (process.env.NODE_ENV !== 'production') {
-      printMessages('NetworkFirst', event, logMessages, response);
+      messages.printFinalResponse(response);
+      _private.logger.groupEnd();
+    }
+
+    return response;
+  }
+
+  /**
+   * @param {FetchEvent} event
+   * @return {Promise<Response>}
+   */
+  async _getFromNetwork(event) {
+    const response = await _private.fetchWrapper.fetch(
+      event.request,
+      null,
+      this._plugins
+    );
+
+    if (response) {
+      event.waitUntil(
+        _private.cacheWrapper.put(
+          this._cacheName,
+          event.request,
+          response.clone(),
+          this._plugins
+        )
+      );
     }
 
     return response;
