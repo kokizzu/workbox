@@ -52,8 +52,6 @@ class CacheFirst {
    * @return {Promise<Response>}
    */
   async handle({url, event, params}) {
-    console.log('HELLO<--------------', event);
-
     const logMessages = [];
     let error;
     if (process.env.NODE_ENV !== 'production') {
@@ -65,16 +63,12 @@ class CacheFirst {
       });
     }
 
-    console.log('HELLO<-------------- 2');
-
     let response = await _private.cacheWrapper.match(
       this._cacheName,
       event.request,
       null,
       this._plugins
     );
-
-    console.log('HELLO<-------------- 3');
 
     if (process.env.NODE_ENV !== 'production') {
       if (response) {
@@ -85,11 +79,8 @@ class CacheFirst {
       }
     }
 
-    console.log('HELLO<-------------- 4');
-
     if (!response) {
       try {
-        console.log('HELLO<-------------- 5');
         response = await _private.fetchWrapper.fetch(
           event.request,
           null,
@@ -106,8 +97,6 @@ class CacheFirst {
             this._plugins
           )
         );
-
-        console.log('HELLO<-------------- 6');
       } catch (err) {
         if (process.env.NODE_ENV !== 'production') {
           logMessages.push(`Failed to get response from network.`, err);
@@ -115,8 +104,6 @@ class CacheFirst {
         error = err;
       }
     }
-
-    console.log('HELLO<-------------- 7');
 
     if (process.env.NODE_ENV !== 'production') {
       const urlObj = new URL(event.request.url);
@@ -130,15 +117,11 @@ class CacheFirst {
       _private.logger.end();
     }
 
-    console.log('HELLO<-------------- 8');
-
     if (error) {
       // Don't swallow error as we'll want it to throw and enable catch
       // handlers in router.
       throw error;
     }
-
-    console.log('HELLO<-------------- 9');
 
     return response;
   }
