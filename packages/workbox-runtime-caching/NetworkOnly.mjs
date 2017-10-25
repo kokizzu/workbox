@@ -53,6 +53,7 @@ class NetworkOnly {
    * @return {Promise<Response>}
    */
   async handle({url, event, params}) {
+    const logMessages = [];
     if (process.env.NODE_ENV !== 'production') {
       core.assert.isInstance(event, FetchEvent, {
         moduleName: 'workbox-runtime-caching',
@@ -62,11 +63,42 @@ class NetworkOnly {
       });
     }
 
-    return _private.fetchWrapper.fetch(
+    const response = await _private.fetchWrapper.fetch(
       event.request,
       null,
       this._plugins
     );
+
+    if (process.env.NODE_ENV !== 'production') {
+      if (response) {
+        logMessages.push(`A response was retrieved from the network with ` +
+          `status code '${response.status}', this will be returned to the ` +
+          `browser.`);
+      } else {
+        logMessages.push(`A response could not be retrieved from the ` +
+          `network.`);
+      }
+
+      const urlObj = new URL(event.request.url);
+      const urlToDisplay = urlObj.origin === location.origin ?
+        urlObj.pathname : urlObj.href;
+      _private.logger.groupCollapsed(`Using NetworkOnly to repond to ` +
+        `'${urlToDisplay}'`);
+
+        logMessages.forEach((msg) => {
+          _private.logger.unprefixed.log(msg);
+        });
+
+      if (response) {
+        _private.logger.groupCollapsed(`View the final response here.`);
+        _private.logger.unprefixed.log(response);
+        _private.logger.groupEnd();
+      }
+
+      _private.logger.groupEnd();
+    }
+
+    return response;
   }
 }
 

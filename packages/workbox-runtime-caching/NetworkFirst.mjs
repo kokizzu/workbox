@@ -84,6 +84,8 @@ class NetworkFirst {
    * @return {Promise<Response>}
    */
   async handle({url, event, params}) {
+    const logMessages = [];
+
     if (process.env.NODE_ENV !== 'production') {
       core.assert.isInstance(event, FetchEvent, {
         moduleName: 'workbox-runtime-caching',
@@ -98,8 +100,16 @@ class NetworkFirst {
 
     if (this._networkTimeoutSeconds) {
       promises.push(new Promise((resolve) => {
-        const onNetworkTimeout = () => {
-          resolve(this._respondFromCache(event.request));
+        const onNetworkTimeout = async () => {
+          if (process.env.NODE_ENV !== 'production') {
+            logMessages.push(`Timing out the network response at ` +
+              `${this._networkTimeoutSeconds} seconds.`);
+          }
+
+          const {cachedResponse, logMessages} =
+            await this._respondFromCache(event.request);
+          logMessages.push(...logMessages);
+          resolve(cachedResponse);
         };
 
         timeoutId = setTimeout(
@@ -113,25 +123,43 @@ class NetworkFirst {
       event.request,
       this._plugins
     )
-    .then((response) => {
+    .then(async (response) => {
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
 
-      if (!response) {
-        return this._respondFromCache(event.request);
+      if (process.env.NODE_ENV !== 'production') {
+        if (response) {
+          logMessages.push(`A response was retrieved from the network with ` +
+            `status code '${response.status}', this will be returned to the ` +
+            `browser.`);
+        } else {
+          logMessages.push(`A response could not be retrieved from the ` +
+            `network.`);
+        }
       }
 
-      // Keep the service worker alive while we put the request in the cache
-      const responseClone = response.clone();
-      event.waitUntil(
-        _private.cacheWrapper.put(
-          this._cacheName,
-          event.request,
-          responseClone,
-          this._plugins
-        )
-      );
+      if (!response) {
+        const {cachedResponse, logMessages} =
+          await this._respondFromCache(event.request);
+        logMessages.push(...logMessages);
+        response = cachedResponse;
+      } else {
+        if (process.env.NODE_ENV !== 'production') {
+          logMessages.push(`Will add the response to the cache ` +
+            `'${this._cacheName}' if it's valid.`);
+        }
+        // Keep the service worker alive while we put the request in the cache
+        const responseClone = response.clone();
+        event.waitUntil(
+          _private.cacheWrapper.put(
+            this._cacheName,
+            event.request,
+            responseClone,
+            this._plugins
+          )
+        );
+      }
 
       return response;
     },
@@ -143,28 +171,80 @@ class NetworkFirst {
     // NOTE: If this was a .catch(), it would call _responseFromCache inside the
     // .then(), which could fail and throw, which would be caught and a second
     // _responseFromCache call will be made.
-    () => this._respondFromCache(event.request));
+    async (err) => {
+      if (process.env.NODE_ENV !== 'production') {
+        logMessages.push([
+          `The network request threw a error, will look for a response ` +
+          `in the cache.`, err]);
+      }
+      const {cachedResponse, logMessages} =
+        await this._respondFromCache(event.request);
+      logMessages.push(...logMessages);
+      return cachedResponse;
+    });
 
     promises.push(networkPromise);
 
-    return Promise.race(promises);
+    const finalResponse = await Promise.race(promises);
+
+    if (process.env.NODE_ENV !== 'production') {
+      const urlObj = new URL(event.request.url);
+      const urlToDisplay = urlObj.origin === location.origin ?
+        urlObj.pathname : urlObj.href;
+      _private.logger.groupCollapsed(`Using NetworkFirst to repond to ` +
+        `'${urlToDisplay}'`);
+
+        logMessages.forEach((msg) => {
+          if (Array.isArray(msg)) {
+            _private.logger.unprefixed.log(...msg);
+          } else {
+            _private.logger.unprefixed.log(msg);
+          }
+        });
+
+      if (finalResponse) {
+        _private.logger.groupCollapsed(`View the final response here.`);
+        _private.logger.unprefixed.log(finalResponse);
+        _private.logger.groupEnd();
+      }
+
+      _private.logger.groupEnd();
+    }
+
+    return finalResponse;
   }
 
   /**
    * Used if the network timeouts or fails to make the request.
    *
    * @param {Request} request The fetchEvent request to match in the cache
-   * @return {Promise<Response>}
+   * @return {Promise<Object>}
    *
    * @private
    */
-  _respondFromCache(request) {
-    return _private.cacheWrapper.match(
+  async _respondFromCache(request) {
+    const logMessages = [];
+    const response = await _private.cacheWrapper.match(
       this._cacheName,
       request,
       null,
       this._plugins
     );
+
+    if (process.env.NODE_ENV !== 'production') {
+      if (response) {
+        logMessages.push(`Cached response found in '${this._cacheName}'` +
+          `, responding to fetch event with it.`);
+      } else {
+        logMessages.push(`No cached response found in ` +
+          `'${this._cacheName}'.`);
+      }
+    }
+
+    return {
+      response,
+      logMessages,
+    };
   }
 }
 

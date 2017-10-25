@@ -52,6 +52,8 @@ class CacheOnly {
    * @return {Promise<Response>}
    */
   async handle({url, event, params}) {
+    const logMessages = [];
+
     if (process.env.NODE_ENV !== 'production') {
       core.assert.isInstance(event, FetchEvent, {
         moduleName: 'workbox-runtime-caching',
@@ -61,12 +63,41 @@ class CacheOnly {
       });
     }
 
-    return _private.cacheWrapper.match(
+    const response = await _private.cacheWrapper.match(
       this._cacheName,
       event.request,
       null,
       this._plugins
     );
+
+    if (process.env.NODE_ENV !== 'production') {
+      if (response) {
+        logMessages.push(`Found a cached response in '${this._cacheName}'`);
+      } else {
+        logMessages.push(`No response found in cache '${this._cacheName}'`);
+      }
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      const urlObj = new URL(event.request.url);
+      const urlToDisplay = urlObj.origin === location.origin ?
+        urlObj.pathname : urlObj.href;
+      _private.logger.groupCollapsed(`Using CacheOnly to repond to ` +
+        `'${urlToDisplay}'`);
+      logMessages.forEach((msg) => {
+        _private.logger.unprefixed.log(msg);
+      });
+
+      if (response) {
+        _private.logger.groupCollapsed(`View the final response here.`);
+        _private.logger.unprefixed.log(response);
+        _private.logger.groupEnd();
+      }
+
+      _private.logger.groupEnd();
+    }
+
+    return response;
   }
 }
 
